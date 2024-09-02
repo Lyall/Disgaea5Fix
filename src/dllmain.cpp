@@ -150,30 +150,6 @@ void Configuration()
 
 void Resolution()
 {
-    // Get current resolution
-    uint8_t* CurrResolutionScanResult = Memory::PatternScan(baseModule, "48 8B ?? ?? ?? 48 89 ?? ?? ?? ?? ?? 66 ?? ?? ?? ?? ?? ?? ?? ?? 44 88 ?? ?? ?? ?? ?? C6 ?? ?? ?? ?? ?? 01");
-    if (CurrResolutionScanResult) {
-        spdlog::info("Current Resolution: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)CurrResolutionScanResult - (uintptr_t)baseModule);
-
-        static SafetyHookMid CurrResolutionMidHook{};
-        CurrResolutionMidHook = safetyhook::create_mid(CurrResolutionScanResult + 0x5,
-            [](SafetyHookContext& ctx) {
-                // Get ResX and ResY
-                int iResX = static_cast<int>(ctx.rax & 0xFFFFFFFF);
-                int iResY = static_cast<int>((ctx.rax >> 32) & 0xFFFFFFFF);
-
-                // Only log on resolution change
-                if (iResX != iCurrentResX || iResY != iCurrentResY) {
-                    iCurrentResX = iResX;
-                    iCurrentResY = iResY;
-                    CalculateAspectRatio(true);
-                }
-            });
-    }
-    else if (!CurrResolutionScanResult) {
-        spdlog::error("Current Resolution: Pattern scan failed.");
-    }
-
     if (bFixRes) {
         // Stop resolution from being scaled to 16:9
         uint8_t* ResolutionResizeScanResult = Memory::PatternScan(baseModule, "7E ?? 85 ?? 79 ?? ?? 39 8E E3 38 41 ?? ?? 44 ?? ?? 41 ?? ?? 41 ?? ?? C1 ?? 1F 44 ?? ?? 41 ?? ?? 8B ?? 99");
@@ -185,6 +161,30 @@ void Resolution()
         else if (!ResolutionResizeScanResult) {
             spdlog::error("Resolution Resize: Pattern scan failed.");
         }
+    }
+
+    // Get current resolution
+    uint8_t* CurrResolutionScanResult = Memory::PatternScan(baseModule, "8B ?? 99 33 ?? 2B ?? 83 ?? ?? ?? ?? 85 ?? 79 ?? ?? 39 8E E3 38 41 ?? ?? 44 ?? ?? 41 ?? ?? 41 ?? ?? C1 ?? 1F 44 ?? ?? 41 ?? ?? 8B ?? 99");
+    if (CurrResolutionScanResult) {
+        spdlog::info("Current Resolution: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)CurrResolutionScanResult - (uintptr_t)baseModule);
+
+        static SafetyHookMid CurrResolutionMidHook{};
+        CurrResolutionMidHook = safetyhook::create_mid(CurrResolutionScanResult,
+            [](SafetyHookContext& ctx) {
+                // Get ResX and ResY
+                int iResX = (int)ctx.rdi;
+                int iResY = (int)ctx.r11;
+
+                // Only log on resolution change
+                if (iResX != iCurrentResX || iResY != iCurrentResY) {
+                    iCurrentResX = iResX;
+                    iCurrentResY = iResY;
+                    CalculateAspectRatio(true);
+                }
+            });
+    }
+    else if (!CurrResolutionScanResult) {
+        spdlog::error("Current Resolution: Pattern scan failed.");
     }
 }
 
