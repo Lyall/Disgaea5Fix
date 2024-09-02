@@ -26,6 +26,7 @@ std::pair DesktopDimensions = { 0,0 };
 // Ini variables
 bool bFixRes;
 bool bFixAspect;
+bool bFixFOV;
 bool bFixHUD;
 
 // Aspect ratio + HUD stuff
@@ -138,6 +139,8 @@ void Configuration()
     spdlog::info("Config Parse: bFixRes: {}", bFixRes);
     inipp::get_value(ini.sections["Fix Aspect Ratio"], "Enabled", bFixAspect);
     spdlog::info("Config Parse: bFixAspect: {}", bFixAspect);
+    inipp::get_value(ini.sections["Fix FOV"], "Enabled", bFixFOV);
+    spdlog::info("Config Parse: bFixFOV: {}", bFixFOV);
     inipp::get_value(ini.sections["Fix HUD"], "Enabled", bFixHUD);
     spdlog::info("Config Parse: bFixHUD: {}", bFixHUD);
 
@@ -188,7 +191,7 @@ void Resolution()
     }
 }
 
-void AspectRatio()
+void AspectRatioFOV()
 {
     if (bFixAspect) {
         // 3D Aspect Ratio
@@ -206,6 +209,25 @@ void AspectRatio()
         }
         else if (!AspectRatioScanResult) {
             spdlog::error("Aspect Ratio: Pattern scan failed.");
+        }
+    }
+
+    if (bFixFOV) {
+        // FOV
+        uint8_t* FOVScanResult = Memory::PatternScan(baseModule, "C7 44 ?? ?? 00 00 80 3F 48 ?? ?? ?? ?? 00 00 00 00 C7 44 ?? ?? 00 00 80 3F C7 44 ?? ?? 00 00 80 3F 44 0F ?? ?? ?? 44 0F ?? ??");
+        if (FOVScanResult) {
+            spdlog::info("FOV: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)FOVScanResult - (uintptr_t)baseModule);
+
+            static SafetyHookMid FOVMidHook{};
+            FOVMidHook = safetyhook::create_mid(FOVScanResult,
+                [](SafetyHookContext& ctx) {
+                    if (fAspectRatio < fNativeAspect) {
+                        ctx.xmm0.f32[0] /= fAspectMultiplier;
+                    }
+                });
+        }
+        else if (!FOVScanResult) {
+            spdlog::error("FOV: Pattern scan failed.");
         }
     }
 }
@@ -506,7 +528,7 @@ DWORD __stdcall Main(void*)
     Logging();
     Configuration();
     Resolution();
-    AspectRatio();
+    AspectRatioFOV();
     HUD();
     return true;
 }
