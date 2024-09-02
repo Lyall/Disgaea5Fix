@@ -224,11 +224,13 @@ void HUD()
                     [](SafetyHookContext& ctx) {
                         if (ctx.r11 + 0x19C) {
                             *reinterpret_cast<float*>(ctx.r11 + 0x19C) = 1.00f / 1280.00f; // Default
+                            *reinterpret_cast<float*>(ctx.r11 + 0x1A0) = 1.00f / -720.00f; // Default
+
                             if (fAspectRatio > fNativeAspect) {
                                 *reinterpret_cast<float*>(ctx.r11 + 0x19C) = 1.00f / (720.00f * fAspectRatio);
                             }
                             else if (fAspectRatio < fNativeAspect) {
-                                // TODO
+                                *reinterpret_cast<float*>(ctx.r11 + 0x1A0) = 1.00f / (-1280.00f / fAspectRatio);
                             }
                         }
                     });
@@ -244,14 +246,15 @@ void HUD()
             spdlog::info("HUD: Character Sprite Positions: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)SpritePositionsScanResult - (uintptr_t)baseModule);
 
             static SafetyHookMid SpritePositionsMidHook{};
-            SpritePositionsMidHook = safetyhook::create_mid(SpritePositionsScanResult + 0x8,
+            SpritePositionsMidHook = safetyhook::create_mid(SpritePositionsScanResult + 0x10,
                 [](SafetyHookContext& ctx) {
                     if (fAspectRatio > fNativeAspect) {
                         ctx.xmm0.f32[0] /= 640.00f;
                         ctx.xmm0.f32[0] *= 360.00f * fAspectRatio;
                     }
                     else if (fAspectRatio < fNativeAspect) {
-                        // TODO
+                        ctx.xmm1.f32[0] /= -360.00f;
+                        ctx.xmm1.f32[0] *= -640.00f / fAspectRatio;
                     }
                 });
         }
@@ -259,8 +262,30 @@ void HUD()
             spdlog::error("HUD: Character Sprite Positions: Pattern scan failed.");
         }
 
+        // Health Bar Positions
+        uint8_t* HealthBarPositionsScanResult = Memory::PatternScan(baseModule, "F3 0F ?? ?? ?? ?? ?? ?? F3 44 ?? ?? ?? ?? ?? ?? ?? ?? F3 0F ?? ?? F3 0F ?? ?? ?? ?? ?? ?? F3 0F ?? ?? E8 ?? ?? ?? ??");
+        if (HealthBarPositionsScanResult) {
+            spdlog::info("HUD: Health Bar Positions: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)HealthBarPositionsScanResult - (uintptr_t)baseModule);
+
+            static SafetyHookMid HealthBarPositionsMidHook{};
+            HealthBarPositionsMidHook = safetyhook::create_mid(HealthBarPositionsScanResult + 0x16,
+                [](SafetyHookContext& ctx) {
+                    if (fAspectRatio > fNativeAspect) {
+                        ctx.xmm3.f32[0] /= 640.00f;
+                        ctx.xmm3.f32[0] *= 360.00f * fAspectRatio;
+                    }
+                    else if (fAspectRatio < fNativeAspect) {
+                        ctx.xmm1.f32[0] /= 360.00f;
+                        ctx.xmm1.f32[0] *= 640.00f / fAspectRatio;
+                    }
+                });
+        }
+        else if (!HealthBarPositionsScanResult) {
+            spdlog::error("HUD: Health Bar Positions: Pattern scan failed.");
+        }
+
         // Sprite Draw Distance
-        uint8_t* SpriteDrawDistancesScanResult = Memory::PatternScan(baseModule, "F3 0F ?? ?? 8D ?? ?? ?? 80 FD FF FF 2B ?? 3B ??");
+        uint8_t* SpriteDrawDistancesScanResult = Memory::PatternScan(baseModule, "F3 44 ?? ?? ?? F3 0F ?? ?? F3 45 ?? ?? ?? F3 0F ?? ?? F3 44 ?? ?? ?? 41 ?? ?? ?? E8 ?? ?? ?? ??");
         if (SpriteDrawDistancesScanResult) {
             spdlog::info("HUD: Character Sprite Draw Distance: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)SpriteDrawDistancesScanResult - (uintptr_t)baseModule);
 
@@ -268,10 +293,10 @@ void HUD()
             SpriteDrawDistancesMidHook = safetyhook::create_mid(SpriteDrawDistancesScanResult,
                 [](SafetyHookContext& ctx) {
                     if (fAspectRatio > fNativeAspect) {
-                        ctx.xmm7.f32[0] /= fAspectMultiplier;
+                        ctx.xmm2.f32[0] *= fAspectMultiplier;
                     }
                     else if (fAspectRatio < fNativeAspect) {
-                        // TODO
+                        ctx.xmm1.f32[0] *= fAspectMultiplier;
                     }
                 });
         }
@@ -326,12 +351,26 @@ void HUD()
 
             static SafetyHookMid HighlightPositionMidHook{};
             HighlightPositionMidHook = safetyhook::create_mid(HighlightPositionScanResult,
-                [](SafetyHookContext& ctx) {
+                [](SafetyHookContext& ctx) {                
                     if (fAspectRatio > fNativeAspect) {
                         ctx.rdx += (int)fHUDWidthOffset;
                     }
                     else if (fAspectRatio < fNativeAspect) {
                         ctx.r8 += (int)fHUDHeightOffset;
+                    }
+
+                    // Battle Backgrounds
+                    if (ctx.rsp + 0x90) {
+                        if (*reinterpret_cast<int*>(ctx.rsp + 0x90) == 1281 && *reinterpret_cast<int*>(ctx.rsp + 0x98) == 721)
+                        {
+                            if (fAspectRatio > fNativeAspect) {
+                                *reinterpret_cast<int*>(ctx.rsp + 0x90) = (int)ceilf(721.00f * fAspectRatio);
+                            }
+                            else if (fAspectRatio < fNativeAspect) {
+                                *reinterpret_cast<int*>(ctx.rsp + 0x98) = (int)ceilf(1281.00f / fAspectRatio);
+                            }
+                            ctx.rdx = ctx.r8 = 0;
+                        }
                     }
                 });
         }
@@ -352,7 +391,7 @@ void HUD()
                     }
                     else if (fAspectRatio < fNativeAspect) {
                         ctx.r8 += (int)fHUDHeightOffset;
-                    }
+                    }                
                 });
         }
         else if (!BarsPositionScanResult) {
@@ -372,7 +411,7 @@ void HUD()
                     }
                     else if (fAspectRatio < fNativeAspect) {
                         ctx.r8 += (int)fHUDHeightOffset;
-                    }
+                    }                   
                 });
         }
         else if (!ImagesPositionScanResult) {
@@ -393,10 +432,10 @@ void HUD()
                     else if (fAspectRatio < fNativeAspect) {
                         ctx.r8 += (int)fHUDHeightOffset;
                     }
-                    
+
                     // Fade to black
                     if (ctx.rax + 0x28) {
-                        if (*reinterpret_cast<int*>(ctx.rax + 0x28) == 1280 && *reinterpret_cast<int*>(ctx.rax + 0x30) == 720)
+                        if (*reinterpret_cast<int*>(ctx.rax + 0x28) == 1280  && *reinterpret_cast<int*>(ctx.rax + 0x30) == 720)
                         {
                             if (fAspectRatio > fNativeAspect) {
                                 *reinterpret_cast<int*>(ctx.rax + 0x28) = (int)ceilf(720.00f * fAspectRatio);
@@ -404,7 +443,6 @@ void HUD()
                             else if (fAspectRatio < fNativeAspect) {
                                 *reinterpret_cast<int*>(ctx.rax + 0x30) = (int)ceilf(1280.00f / fAspectRatio);
                             }
-                            // No padding
                             ctx.rdx = ctx.r8 = 0;
                         }
                     }
@@ -447,9 +485,6 @@ void HUD()
                         ctx.rdi += (int)fHUDWidthOffset;
                         ctx.rdx += (int)fHUDWidthOffset;
                     }
-                    else if (fAspectRatio < fNativeAspect) {
-                        // TODO
-                    }
                 });
 
             static SafetyHookMid TickerClippingRightMidHook{};
@@ -457,9 +492,6 @@ void HUD()
                 [](SafetyHookContext& ctx) {
                     if (fAspectRatio > fNativeAspect) {
                         ctx.rbx += (int)fHUDWidthOffset;
-                    }
-                    else if (fAspectRatio < fNativeAspect) {
-                        // TODO
                     }
                 });
         }
