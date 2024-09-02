@@ -12,7 +12,7 @@ This is a fix for Disgaea 5 Complete that adds ultrawide/narrower support.
 
 ## Installation
 - Grab the latest release of Disgaea5Fix from [here.](https://github.com/Lyall/Disgaea5Fix/releases)
-- Extract the contents of the release zip in to the the game folder. (e.g. "**steamapps\common\Disgaea 5 Complete**" for Steam).
+- Extract the contents of the release zip in to the the game folder.<br />(e.g. "**steamapps\common\Disgaea 5 Complete**" for Steam).
 
 ### Steam Deck/Linux Additional Instructions
 🚩**You do not need to do this if you are using Windows!**
