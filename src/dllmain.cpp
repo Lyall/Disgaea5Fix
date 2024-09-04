@@ -10,7 +10,7 @@ HMODULE baseModule = GetModuleHandle(NULL);
 
 // Version
 std::string sFixName = "Disgaea5Fix";
-std::string sFixVer = "0.8.0";
+std::string sFixVer = "0.8.1";
 std::string sLogFile = sFixName + ".log";
 
 // Logger
@@ -391,6 +391,7 @@ void HUD()
                             else if (fAspectRatio < fNativeAspect) {
                                 *reinterpret_cast<int*>(ctx.rsp + 0x98) = (int)ceilf(1281.00f / fAspectRatio);
                             }
+                            // No padding
                             ctx.rdx = ctx.r8 = 0;
                         }
                     }
@@ -440,6 +441,40 @@ void HUD()
             spdlog::error("HUD: Images Position: Pattern scan failed.");
         }
 
+        // Auto-scroll Position
+        uint8_t* AutoScrollPositionScanResult = Memory::PatternScan(baseModule, "BA ?? ?? ?? ?? C7 44 ?? ?? ?? ?? ?? ?? ?? 00 05 00 00 C7 44 ?? ?? ?? ?? ?? ??");
+        if (AutoScrollPositionScanResult) {
+            spdlog::info("HUD: Auto-scroll Position: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)AutoScrollPositionScanResult - (uintptr_t)baseModule);
+
+            static SafetyHookMid AutoScrollPositionMidHook{};
+            AutoScrollPositionMidHook = safetyhook::create_mid(AutoScrollPositionScanResult,
+                [](SafetyHookContext& ctx) {
+                    if (fAspectRatio > fNativeAspect) {
+                        ctx.xmm0.f32[0] -= fHUDWidthOffset;
+                    }
+                });
+        }
+        else if (!AutoScrollPositionScanResult) {
+            spdlog::error("HUD: Auto-scrollPosition: Pattern scan failed.");
+        }
+
+        // Skip Position
+        uint8_t* SkipPositionScanResult = Memory::PatternScan(baseModule, "C7 44 ?? ?? ?? ?? ?? ?? B8 ?? ?? ?? ?? C7 44 ?? ?? ?? ?? ?? ?? 41 ?? ?? ?? ?? ?? C7 44 ?? ?? ?? ?? ?? ?? 45 ?? ?? 44 ?? ??");
+        if (SkipPositionScanResult) {
+            spdlog::info("HUD: Skip Position: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)SkipPositionScanResult - (uintptr_t)baseModule);
+
+            static SafetyHookMid SkipPositionMidHook{};
+            SkipPositionMidHook = safetyhook::create_mid(SkipPositionScanResult,
+                [](SafetyHookContext& ctx) {
+                    if (fAspectRatio > fNativeAspect) {
+                        ctx.rbx += (int)fHUDWidthOffset;
+                    }
+                });
+        }
+        else if (!SkipPositionScanResult) {
+            spdlog::error("HUD: Skip Position: Pattern scan failed.");
+        }
+
         // Ticker Position
         uint8_t* TickerPositionScanResult = Memory::PatternScan(baseModule, "41 ?? ?? 8B ?? 41 ?? ?? ?? ?? ?? ?? 00 0F 85 ?? ?? ?? ?? 8B ?? ?? ?? ?? ?? ?? 48 89 ?? ??");
         if (TickerPositionScanResult) {
@@ -457,7 +492,7 @@ void HUD()
 
                     // Fade to black
                     if (ctx.rax + 0x28) {
-                        if (*reinterpret_cast<int*>(ctx.rax + 0x28) == 1280  && *reinterpret_cast<int*>(ctx.rax + 0x30) == 720)
+                        if (*reinterpret_cast<int*>(ctx.rax + 0x28) == 1280 && *reinterpret_cast<int*>(ctx.rax + 0x30) == 720)
                         {
                             if (fAspectRatio > fNativeAspect) {
                                 *reinterpret_cast<int*>(ctx.rax + 0x28) = (int)ceilf(720.00f * fAspectRatio);
@@ -465,6 +500,7 @@ void HUD()
                             else if (fAspectRatio < fNativeAspect) {
                                 *reinterpret_cast<int*>(ctx.rax + 0x30) = (int)ceilf(1280.00f / fAspectRatio);
                             }
+                            // No padding
                             ctx.rdx = ctx.r8 = 0;
                         }
                     }
@@ -480,19 +516,40 @@ void HUD()
             spdlog::info("HUD: Logos Position: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)LogosPositionScanResult - (uintptr_t)baseModule);
 
             static SafetyHookMid LogosPositionMidHook{};
-            LogosPositionMidHook = safetyhook::create_mid(LogosPositionScanResult,
+            LogosPositionMidHook = safetyhook::create_mid(LogosPositionScanResult + 0x9,
                 [](SafetyHookContext& ctx) {
                     if (fAspectRatio > fNativeAspect) {
                         ctx.xmm8.f32[0] += fHUDWidthOffset;
                         ctx.xmm6.f32[0] /= fAspectMultiplier;
                     }
                     else if (fAspectRatio < fNativeAspect) {
-                        // TODO
+                        ctx.xmm9.f32[0] += fHUDHeightOffset;
+                        ctx.xmm7.f32[0] *= fAspectMultiplier;
                     }
                 });
         }
         else if (!LogosPositionScanResult) {
             spdlog::error("HUD: Logos Position: Pattern scan failed.");
+        }
+
+        // Backgrounds
+        uint8_t* BackgroundsScanResult = Memory::PatternScan(baseModule, "F3 0F ?? ?? ?? ?? ?? ?? 89 ?? ?? ?? ?? ?? 89 ?? ?? ?? ?? ?? 48 8D ?? ?? ?? ?? ?? E8 ?? ?? ?? ??");
+        if (BackgroundsScanResult) {
+            spdlog::info("HUD: Backgrounds: Address is {:s}+{:x}", sExeName.c_str(), (uintptr_t)BackgroundsScanResult - (uintptr_t)baseModule);
+
+            static SafetyHookMid BackgroundsMidHook{};
+            BackgroundsMidHook = safetyhook::create_mid(BackgroundsScanResult + 0x8,
+                [](SafetyHookContext& ctx) {
+                    if (fAspectRatio > fNativeAspect) {
+                        ctx.rax -= (int)fHUDWidthOffset;
+                    }
+                    else if (fAspectRatio < fNativeAspect) {
+                        ctx.rdx -= (int)fHUDHeightOffset;
+                    }
+                });
+        }
+        else if (!BackgroundsScanResult) {
+            spdlog::error("HUD: Backgrounds: Pattern scan failed.");
         }
 
         // Ticker Clipping
